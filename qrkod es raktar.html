@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Raktár rendszer QR-rel</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+body{font-family:Segoe UI;margin:0;background:#e9eef5;}
+.topbar{background:#2f3e52;color:white;padding:10px;font-size:18px;}
+.container{padding:15px;}
+.toolbar{margin-bottom:10px;}
+button{padding:6px 12px;border:none;background:#4a79c9;color:white;border-radius:4px;cursor:pointer;}
+button:hover{background:#3c65a8;}
+input{padding:6px;border:1px solid #ccc;border-radius:4px;}
+.table-container{background:white;border:1px solid #cfd6e0;height:300px;overflow:auto;}
+table{width:100%;border-collapse:collapse;font-size:14px;}
+th{background:#dde6f4;padding:8px;border:1px solid #cfd6e0;text-align:left;}
+td{padding:6px;border:1px solid #e1e6ef;}
+tr:hover{background:#f3f7ff;}
+.form-panel{background:white;padding:10px;border:1px solid #cfd6e0;margin-bottom:10px;}
+#qrcode{margin-top:10px;}
+</style>
+</head>
+<body>
+
+<div class="topbar">Raktár kezelő rendszer</div>
+<div class="container">
+
+<!-- Raktár felvitel -->
+<div class="form-panel">
+<input id="kod" placeholder="QR / Vonalkód">
+<input id="nev" placeholder="Termék neve">
+<input id="polc" placeholder="Polc hely">
+<input id="keszlet" placeholder="Mennyiség">
+<button onclick="addItem()">Hozzáadás / Frissítés</button>
+</div>
+
+<!-- QR generáló -->
+<div class="form-panel">
+<h4>QR generálás</h4>
+<input id="qrNev" placeholder="Termék neve">
+<input id="qrPolc" placeholder="Polc hely">
+<input id="qrKeszlet" placeholder="Mennyiség">
+<button onclick="generateQR()">QR létrehozása</button>
+<div id="qrcode"></div>
+</div>
+
+<!-- Kereső -->
+<div class="toolbar">
+<input id="search" placeholder="Keresés..." onkeyup="searchTable()">
+</div>
+
+<!-- Táblázat -->
+<div class="table-container">
+<table id="raktar">
+<thead>
+<tr>
+<th>Kód</th>
+<th>Termék neve</th>
+<th>Készlet</th>
+<th>Polc</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+</div>
+
+<script>
+let data = [];
+
+function addItem(kodInput, nevInput, polcInput, keszletInput){
+    // Ha paraméterek vannak (QR beolvasás), használjuk azokat, egyébként a form mezőket
+    let kod = kodInput || document.getElementById("kod").value.trim();
+    let nev = nevInput || document.getElementById("nev").value.trim();
+    let polc = polcInput || document.getElementById("polc").value.trim();
+    let keszlet = keszletInput !== undefined ? parseInt(keszletInput) : parseInt(document.getElementById("keszlet").value);
+
+    if(!kod || !nev || !polc || isNaN(keszlet)){
+        alert("Kérlek töltsd ki az összes mezőt érvényes értékkel!");
+        return;
+    }
+
+    let existingItem = data.find(item => item.kod === kod);
+
+    if(existingItem){
+        existingItem.keszlet = keszlet;
+        existingItem.polc = polc;
+        existingItem.nev = nev;
+    } else {
+        let obj = {kod:kod, nev:nev, polc:polc, keszlet:keszlet};
+        data.push(obj);
+    }
+
+    render();
+
+    // Mezők törlése
+    if(!kodInput){
+        document.getElementById("kod").value = "";
+        document.getElementById("nev").value = "";
+        document.getElementById("polc").value = "";
+        document.getElementById("keszlet").value = "";
+    }
+}
+
+function render(){
+    let tbody = document.querySelector("#raktar tbody");
+    tbody.innerHTML = "";
+    data.forEach(item => {
+        let row = document.createElement("tr");
+
+        let tdKod = document.createElement("td"); tdKod.textContent = item.kod; row.appendChild(tdKod);
+        let tdNev = document.createElement("td"); tdNev.textContent = item.nev; row.appendChild(tdNev);
+        let tdKeszlet = document.createElement("td"); tdKeszlet.textContent = item.keszlet; tdKeszlet.contentEditable = true;
+        tdKeszlet.addEventListener("blur", function(){
+            let newValue = parseInt(tdKeszlet.textContent);
+            if(!isNaN(newValue)){ item.keszlet = newValue; } 
+            else { tdKeszlet.textContent = item.keszlet; alert("Érvényes számot adj meg!"); }
+        });
+        row.appendChild(tdKeszlet);
+        let tdPolc = document.createElement("td"); tdPolc.textContent = item.polc; row.appendChild(tdPolc);
+
+        tbody.appendChild(row);
+    });
+}
+
+function searchTable(){
+    let input = document.getElementById("search").value.toLowerCase();
+    let rows = document.querySelectorAll("#raktar tbody tr");
+    rows.forEach(row => { row.style.display = row.innerText.toLowerCase().includes(input) ? "" : "none"; });
+}
+
+// QR generálás
+function generateQR(){
+    let nev = document.getElementById("qrNev").value.trim();
+    let polc = document.getElementById("qrPolc").value.trim();
+    let keszlet = document.getElementById("qrKeszlet").value.trim();
+    if(!nev || !polc || !keszlet){ alert("Töltsd ki az összes mezőt!"); return; }
+
+    let qrData = JSON.stringify({nev:nev, polc:polc, keszlet:keszlet});
+    document.getElementById("qrcode").innerHTML = "";
+    new QRCode(document.getElementById("qrcode"), {
+        text: qrData,
+        width: 128,
+        height: 128
+    });
+}
+
+// Példa QR beolvasás: ha van QR olvasód, a JSON-t így adhatod át
+function scanQR(qrJson){
+    try{
+        let obj = JSON.parse(qrJson);
+        let kod = "QR_" + Date.now(); // automatikus kód a QR-hez
+        addItem(kod, obj.nev, obj.polc, parseInt(obj.keszlet));
+    } catch(e){ alert("Hibás QR kód!"); }
+}
+</script>
+
+</body>
+</html>
